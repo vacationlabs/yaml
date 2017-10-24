@@ -44,6 +44,8 @@ import qualified Data.Yaml as Y
 import qualified Data.Yaml.Include as YI
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
+import GHC.Stack
+import Data.Aeson.Internal (ifromJSON, IResult(..), formatError)
 
 newtype MergedValue = MergedValue { getMergedValue :: Value }
 
@@ -63,7 +65,8 @@ mergeValues x _ = x
 -- used.
 --
 -- @since 0.8.16
-applyEnvValue :: Bool -- ^ require an environment variable to be present?
+applyEnvValue :: (HasCallStack)
+              => Bool -- ^ require an environment variable to be present?
               -> H.HashMap Text Text -> Value -> Value
 applyEnvValue requireEnv' env =
     goV
@@ -168,7 +171,8 @@ requireCustomEnv = RequireCustomEnv
 --
 -- @since 0.8.16
 loadYamlSettings
-    :: FromJSON settings
+    :: ( FromJSON settings
+       , HasCallStack)
     => [FilePath] -- ^ run time config files to use, earlier files have precedence
     -> [Value] -- ^ any other values to use, usually from compile time config. overridden by files
     -> EnvUsage
@@ -194,16 +198,17 @@ loadYamlSettings runTimeFiles compileValues envUsage = do
             UseCustomEnv env     -> return $ applyEnvValue   False env    value'
             RequireCustomEnv env -> return $ applyEnvValue   True  env    value'
 
-    case fromJSON value of
-        Error s -> error $ "Could not convert to AppSettings: " ++ s
-        Success settings -> return settings
+    case (ifromJSON value) of
+        IError jsonPath_ s -> error $ "Could not decode YAML file(s) and/or the environment variables via the FromJSON instance: " ++ (formatError jsonPath_ s) ++ "\n===============\nPOSSIBLE FIX: If you are using _env:ENV_NAME:default in your YAML file for numeric values, please try wrapping/unwrapping the value in double-quotes, eg.\n\n  port:  _env:APP_PORT:\"3000\"  # or _env:APP_PORT:3000\n===============\n\n\nThis is the interim Aeson.Value that I was trying to parse:\n\n" ++ (show value) ++ "\n\n===============\n"
+        ISuccess settings -> return settings
 
 -- | Same as @loadYamlSettings@, but get the list of runtime config files from
 -- the command line arguments.
 --
 -- @since 0.8.17
 loadYamlSettingsArgs
-    :: FromJSON settings
+    :: ( FromJSON settings
+       , HasCallStack)
     => [Value] -- ^ any other values to use, usually from compile time config. overridden by files
     -> EnvUsage -- ^ use environment variables
     -> IO settings

@@ -23,9 +23,11 @@ import System.FilePath
 import Data.Yaml.Internal (ParseException(..), decodeHelper_, decodeHelper)
 import Text.Libyaml hiding (decodeFile)
 import qualified Text.Libyaml as Y
+import GHC.Stack
 
 eventsFromFile
-    :: MonadResource m
+    :: ( MonadResource m
+       , HasCallStack)
     => FilePath
     -> Producer m Event
 eventsFromFile = go []
@@ -62,7 +64,8 @@ eventsFromFile = go []
 --
 -- > somekey: !include ./somefile.yaml
 decodeFile
-    :: FromJSON a
+    :: ( FromJSON a
+       , HasCallStack)
     => FilePath
     -> IO (Maybe a)
 decodeFile fp = decodeHelper (eventsFromFile fp) >>= either throwIO (return . either (const Nothing) id)
@@ -74,7 +77,8 @@ decodeFile fp = decodeHelper (eventsFromFile fp) >>= either throwIO (return . ei
 --
 -- > somekey: !include ./somefile.yaml
 decodeFileEither
-    :: FromJSON a
+    :: ( FromJSON a
+       , HasCallStack)
     => FilePath
     -> IO (Either ParseException a)
 decodeFileEither = decodeHelper_ . eventsFromFile

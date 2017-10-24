@@ -39,6 +39,7 @@ import Data.Text.Encoding (decodeUtf8With)
 import Data.Text.Encoding.Error (lenientDecode)
 import Data.Typeable
 import qualified Data.Vector as V
+import GHC.Stack
 
 import qualified Text.Libyaml as Y
 import Text.Libyaml hiding (encode, decode, encodeFile, decodeFile)
@@ -125,12 +126,12 @@ instance MonadIO m => MonadIO (PErrorT m) where
 
 type Parse = StateT (Map.Map String Value) (ResourceT IO)
 
-requireEvent :: Event -> C.Sink Event Parse ()
+requireEvent :: (HasCallStack) => Event -> C.Sink Event Parse ()
 requireEvent e = do
     f <- CL.head
     unless (f == Just e) $ liftIO $ throwIO $ UnexpectedEvent f $ Just e
 
-parse :: C.Sink Event Parse Value
+parse :: (HasCallStack) => C.Sink Event Parse Value
 parse = do
     streamStart <- CL.head
     case streamStart of
@@ -178,7 +179,7 @@ textToValue _ _ t
 textToScientific :: Text -> Either String Scientific
 textToScientific = Atto.parseOnly (Atto.scientific <* Atto.endOfInput)
 
-parseO :: C.Sink Event Parse Value
+parseO :: (HasCallStack) => C.Sink Event Parse Value
 parseO = do
     me <- CL.head
     case me of
@@ -210,7 +211,8 @@ parseS a front = do
             o <- parseO
             parseS a $ front . (:) o
 
-parseM :: Y.Anchor
+parseM :: (HasCallStack)
+       => Y.Anchor
        -> M.HashMap Text Value
        -> C.Sink Event Parse Value
 parseM a front = do
@@ -248,7 +250,8 @@ parseM a front = do
     where merge' al (Object om) = M.union al om
           merge' al _           = al
 
-decodeHelper :: FromJSON a
+decodeHelper :: ( FromJSON a
+                , HasCallStack)
              => C.Source Parse Y.Event
              -> IO (Either ParseException (Either String a))
 decodeHelper src = do
@@ -263,7 +266,8 @@ decodeHelper src = do
             | otherwise -> throwIO e
         Right y -> return $ Right $ parseEither parseJSON y
 
-decodeHelper_ :: FromJSON a
+decodeHelper_ :: ( FromJSON a
+                 , HasCallStack)
               => C.Source Parse Event
               -> IO (Either ParseException a)
 decodeHelper_ src = do
